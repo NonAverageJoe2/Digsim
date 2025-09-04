@@ -9,6 +9,8 @@ WORLD_HEIGHT = 100  # number of tiles vertically
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 SKY_BLUE = (135, 206, 235)
+# Number of empty sky tiles above the ground surface
+SURFACE_LEVEL = 10
 
 # Tile type definitions
 GRASS = 'grass'
@@ -75,13 +77,14 @@ def generate_world():
     world = [[None for _ in range(WORLD_HEIGHT)] for _ in range(WORLD_WIDTH)]
     background = [[SKY_BLUE for _ in range(WORLD_HEIGHT)] for _ in range(WORLD_WIDTH)]
     for x in range(WORLD_WIDTH):
-        world[x][0] = GRASS
-        background[x][0] = BG_COLORS[GRASS]
+        ground_y = SURFACE_LEVEL
+        world[x][ground_y] = GRASS
+        background[x][ground_y] = BG_COLORS[GRASS]
         dirt_depth = random.randint(9, 16)
-        for y in range(1, dirt_depth):
+        for y in range(ground_y + 1, ground_y + dirt_depth):
             world[x][y] = DIRT
             background[x][y] = BG_COLORS[DIRT]
-        for y in range(dirt_depth, WORLD_HEIGHT - 1):
+        for y in range(ground_y + dirt_depth, WORLD_HEIGHT - 1):
             tile = STONE
             if random.random() < 0.05:
                 tile = GEM
@@ -130,9 +133,10 @@ def main():
 
     world, background = generate_world()
 
-    player = pygame.Rect(5 * TILE_SIZE, -TILE_SIZE, TILE_SIZE // 2, TILE_SIZE)
+    player = pygame.Rect(5 * TILE_SIZE, SURFACE_LEVEL * TILE_SIZE - TILE_SIZE, TILE_SIZE // 2, TILE_SIZE)
     velocity = [0, 0]
     camera_x = 0
+    camera_y = 0
     mining_effects = []
 
     running = True
@@ -151,14 +155,16 @@ def main():
                         mining_effects.append(MiningEffect(tx, ty))
 
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             velocity[0] = -150
-        elif keys[pygame.K_RIGHT]:
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             velocity[0] = 150
         else:
             velocity[0] = 0
-        if keys[pygame.K_SPACE] and velocity[1] == 0:
+        if (keys[pygame.K_UP] or keys[pygame.K_w] or keys[pygame.K_SPACE]) and velocity[1] == 0:
             velocity[1] = -300
+        if keys[pygame.K_DOWN] or keys[pygame.K_s]:
+            velocity[1] = 150
 
         velocity[1] += 600 * dt
         player.x += int(velocity[0] * dt)

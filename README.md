@@ -11,4 +11,5 @@ This repository contains a simple Python 2D side scrolling platformer built with
 python platformer.py
 ```
 
-Use the arrow keys to move, space to jump and left click to mine tiles.
+Use the arrow keys or WASD to move. W or the up arrow jumps, A/left moves left,
+S/down moves down and D/right moves right. Left click mines tiles.
