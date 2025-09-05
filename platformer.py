@@ -170,27 +170,27 @@ except Exception:
 
 # --------------------------------- Items / Tools ------------------------------
 ITEMS = {
-    "hand":         {"type": "tool", "name": "Hand",          "color": (200, 200, 160)},
-    "wood_pick":    {"type": "tool", "name": "Wood Pick",     "color": (160, 120, 60)},
-    "stone_pick":   {"type": "tool", "name": "Stone Pick",    "color": (150, 150, 150)},
-    "metal_pick":   {"type": "tool", "name": "Metal Pick",    "color": (180, 180, 210)},
-    "wood_shovel":  {"type": "tool", "name": "Wood Shovel",   "color": (170, 130, 70)},
-    "metal_shovel": {"type": "tool", "name": "Metal Shovel",  "color": (190, 190, 215)},
-    "sword":        {"type": "tool", "name": "Sword",         "color": (210, 210, 230)},
+    "hand":         {"type": "tool", "name": "Hand",          "color": (200, 200, 160), "desc": "Your trusty appendage. Always available."},
+    "wood_pick":    {"type": "tool", "name": "Wood Pick",     "color": (160, 120, 60),  "desc": "Basic pickaxe for chipping stone."},
+    "stone_pick":   {"type": "tool", "name": "Stone Pick",    "color": (150, 150, 150), "desc": "Sturdier pickaxe that mines a bit faster."},
+    "metal_pick":   {"type": "tool", "name": "Metal Pick",    "color": (180, 180, 210), "desc": "Reliable metal pickaxe for quick mining."},
+    "wood_shovel":  {"type": "tool", "name": "Wood Shovel",   "color": (170, 130, 70),  "desc": "Simple shovel for digging soft blocks."},
+    "metal_shovel": {"type": "tool", "name": "Metal Shovel",  "color": (190, 190, 215), "desc": "Durable shovel that digs quickly."},
+    "sword":        {"type": "tool", "name": "Sword",         "color": (210, 210, 230), "desc": "Balanced blade for close combat."},
 
-    "hp_potion":    {"type": "consumable", "name": "HP Potion",   "color": (210, 60, 60)},
-    "stam_potion":  {"type": "consumable", "name": "Stam Potion", "color": (70, 200, 110)},
+    "hp_potion":    {"type": "consumable", "name": "HP Potion",   "color": (210, 60, 60),  "desc": "Restores a portion of health."},
+    "stam_potion":  {"type": "consumable", "name": "Stam Potion", "color": (70, 200, 110), "desc": "Refills stamina for mining."},
 
-    "grass_item":   {"type": "res",  "name": "Grass",         "color": TILE_COLORS[GRASS]},
-    "dirt_item":    {"type": "res",  "name": "Dirt",          "color": TILE_COLORS[DIRT]},
-    "stone_item":   {"type": "res",  "name": "Stone",         "color": TILE_COLORS[STONE]},
+    "grass_item":   {"type": "res",  "name": "Grass",         "color": TILE_COLORS[GRASS],   "desc": "Soft clump of surface grass."},
+    "dirt_item":    {"type": "res",  "name": "Dirt",          "color": TILE_COLORS[DIRT],    "desc": "Common earth from the surface."},
+    "stone_item":   {"type": "res",  "name": "Stone",         "color": TILE_COLORS[STONE],   "desc": "Rugged rock from underground."},
 
-    "coal_item":    {"type": "res",  "name": "Coal",          "color": TILE_COLORS[COAL]},
-    "copper_item":  {"type": "res",  "name": "Copper",        "color": TILE_COLORS[COPPER]},
-    "iron_item":    {"type": "res",  "name": "Iron",          "color": TILE_COLORS[IRON]},
-    "gold_item":    {"type": "res",  "name": "Gold",          "color": TILE_COLORS[GOLD]},
-    "emerald_item": {"type": "res",  "name": "Emerald",       "color": TILE_COLORS[EMERALD]},
-    "diamond_item": {"type": "res",  "name": "Diamond",       "color": TILE_COLORS[DIAMOND]},
+    "coal_item":    {"type": "res",  "name": "Coal",          "color": TILE_COLORS[COAL],    "desc": "Burnable fossil fuel."},
+    "copper_item":  {"type": "res",  "name": "Copper",        "color": TILE_COLORS[COPPER],  "desc": "Common conductive metal."},
+    "iron_item":    {"type": "res",  "name": "Iron",          "color": TILE_COLORS[IRON],    "desc": "Strong metal used for tools."},
+    "gold_item":    {"type": "res",  "name": "Gold",          "color": TILE_COLORS[GOLD],    "desc": "Valuable shiny metal."},
+    "emerald_item": {"type": "res",  "name": "Emerald",       "color": TILE_COLORS[EMERALD], "desc": "Rare green gemstone."},
+    "diamond_item": {"type": "res",  "name": "Diamond",       "color": TILE_COLORS[DIAMOND], "desc": "Extremely hard blue gem."},
 }
 
 # Tool mining speed factor (duration is divided by this)
@@ -666,7 +666,7 @@ def build_shop_button_ui(screen):
     SHOP_UI_SURF = pygame.Surface((sw, sh), pygame.SRCALPHA)
     SHOP_FONT = pygame.font.SysFont(None, 22)
     pygame.draw.rect(SHOP_UI_SURF, (30, 30, 30), SHOP_BTN_RECT, border_radius=6)
-    label = SHOP_FONT.render("Shop", True, (235, 235, 235))
+    label = SHOP_FONT.render("Shop (B)", True, (235, 235, 235))
     SHOP_UI_SURF.blit(label, (SHOP_BTN_RECT.x + 12, SHOP_BTN_RECT.y + 6))
 
 # ------------------------------ Inventory / Skills ----------------------------
@@ -690,6 +690,18 @@ def draw_item_icon(surf: pygame.Surface, rect: pygame.Rect, item_id: str):
     info = ITEMS.get(item_id)
     if not info: return
     pygame.draw.rect(surf, info["color"], rect.inflate(-8, -8), border_radius=6)
+
+
+def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
+    """Simple word-wrapping helper."""
+    words = text.split()
+    lines: list[str] = []
+    while words:
+        line = words.pop(0)
+        while words and font.size(line + ' ' + words[0])[0] <= max_width:
+            line += ' ' + words.pop(0)
+        lines.append(line)
+    return lines
 
 def draw_hotbar(screen: pygame.Surface, font: pygame.font.Font,
                 slots: list[str | None], selected_idx: int):
@@ -721,6 +733,10 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
     if not open_panel:
         return [], []  # (item_cells, tool_cells)
 
+    mx, my = pygame.mouse.get_pos()
+    hovered: str | None = None
+    hovered_rect: pygame.Rect | None = None
+
     panel_w = INV_PAD*2 + INV_COLS*INV_CELL + (INV_COLS-1)*6
     panel_h = INV_PAD*2 + INV_ROWS*INV_CELL + (INV_ROWS-1)*6 + 54
     panel = pygame.Rect(10, sh - HOTBAR_H - 56 - panel_h - 8, panel_w, panel_h)
@@ -741,18 +757,19 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
             continue
         cell = pygame.Rect(tx, ty, 30, 30)
         pygame.draw.rect(screen, (35,35,35), cell, border_radius=6)
-        pygame.draw.rect(screen, (80,80,80), cell, 1, border_radius=6)
+        if cell.collidepoint(mx, my):
+            pygame.draw.rect(screen, (230,230,90), cell, 2, border_radius=6)
+            hovered, hovered_rect = tool_id, cell
+        else:
+            pygame.draw.rect(screen, (80,80,80), cell, 1, border_radius=6)
         draw_item_icon(screen, cell, tool_id)
         # durability bar
-        mx = TOOL_MAX_DUR.get(tool_id)
-        if mx and mx > 0:
-            v = max(0.0, min(1.0, (dur or 0)/mx))
+        mx_dur = TOOL_MAX_DUR.get(tool_id)
+        if mx_dur and mx_dur > 0:
+            v = max(0.0, min(1.0, (dur or 0)/mx_dur))
             bar = pygame.Rect(cell.x, cell.bottom+2, 30, 4)
             pygame.draw.rect(screen, (40,40,40), bar)
             pygame.draw.rect(screen, (200,200,90), (bar.x, bar.y, int(30*v), 4))
-        name = ITEMS[tool_id]["name"]
-        nm = font.render(name, True, (200,200,200))
-        screen.blit(nm, (cell.x - 4, cell.bottom + 8))
         tool_cells.append((cell, tool_id))
         tx += 36
 
@@ -765,20 +782,49 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
         for c in range(INV_COLS):
             cell = pygame.Rect(x, y, INV_CELL, INV_CELL)
             pygame.draw.rect(screen, (30,30,30), cell, border_radius=8)
-            pygame.draw.rect(screen, (80,80,80), cell, 1, border_radius=8)
             if idx < len(inv):
+                if cell.collidepoint(mx, my):
+                    pygame.draw.rect(screen, (230,230,90), cell, 2, border_radius=8)
+                    hovered, hovered_rect = list(inv.keys())[idx], cell
+                else:
+                    pygame.draw.rect(screen, (80,80,80), cell, 1, border_radius=8)
                 item_id = list(inv.keys())[idx]
                 draw_item_icon(screen, cell, item_id)
                 cnt = inv[item_id]
                 cnt_txt = font.render(str(cnt), True, (240,240,240))
                 screen.blit(cnt_txt, (cell.right - cnt_txt.get_width() - 6, cell.bottom - cnt_txt.get_height() - 4))
                 clickable_cells.append((cell, item_id))
+            else:
+                pygame.draw.rect(screen, (80,80,80), cell, 1, border_radius=8)
             x += INV_CELL + 6
             idx += 1
         y += INV_CELL + 6
 
     help_txt = font.render(f"Click a tool to equip to slot {selected_hotbar_slot+1}", True, (200,200,200))
     screen.blit(help_txt, (panel.x + 12, panel.bottom - 22))
+
+    if hovered and hovered_rect:
+        item = ITEMS.get(hovered)
+        if item:
+            lines = [item["name"]]
+            if "desc" in item:
+                lines += wrap_text(item["desc"], font, 200)
+            pad = 6
+            tw = max(font.size(l)[0] for l in lines) + pad*2
+            th = len(lines) * font.get_height() + pad*2
+            tx = hovered_rect.right + 8
+            ty = hovered_rect.y
+            if tx + tw > sw:
+                tx = hovered_rect.x - tw - 8
+            if ty + th > sh:
+                ty = sh - th - 8
+            tip = pygame.Rect(tx, ty, tw, th)
+            pygame.draw.rect(screen, (0,0,0), tip)
+            pygame.draw.rect(screen, (200,200,200), tip, 1)
+            for i, line in enumerate(lines):
+                txt = font.render(line, True, (240,240,240))
+                screen.blit(txt, (tip.x + pad, tip.y + pad + i*font.get_height()))
+
     return clickable_cells, tool_cells
 
 def draw_skills(screen: pygame.Surface, font: pygame.font.Font,
@@ -1022,6 +1068,28 @@ def main():
                     minimap_open = not minimap_open
                 elif event.key == pygame.K_h:
                     take_damage(12.0)
+                elif event.key == pygame.K_b:
+                    if run_shop is None:
+                        print("[world] Shop not available (shop_scene.py missing).")
+                    else:
+                        returned = None
+                        try:
+                            returned = run_shop(screen, coins, inventory, tools_owned)
+                        except TypeError:
+                            run_shop(screen)
+                        else:
+                            if isinstance(returned, (list, tuple)) and len(returned) >= 3:
+                                coins, inventory, tools_owned = returned[0], returned[1], returned[2]
+                            elif isinstance(returned, dict):
+                                coins = returned.get("coins", coins)
+                                inventory = returned.get("inventory", inventory)
+                                tools_owned = returned.get("tools_owned", tools_owned)
+                        spawn_player_on_surface(world, player)
+                        vy = 0.0
+                        on_ground = True
+                        player = push_player_out_of_solids(world, player)
+                        player, on_ground = snap_player_to_ground(world, player)
+                        build_shop_button_ui(screen)
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = pygame.mouse.get_pos()
