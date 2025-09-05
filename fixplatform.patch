@@ -1,0 +1,50 @@
+diff --git a/platformer.py b/platformer.py
+index 0000000..0000001 100644
+--- a/platformer.py
++++ b/platformer.py
+@@ -321,14 +321,14 @@ def spawn_player_on_surface(world, player: pygame.Rect, prefer_tx: int | None = None) -> None:
+     if prefer_tx is None:
+         prefer_tx = player.centerx // TILE_SIZE
+     prefer_tx = max(0, min(WORLD_WIDTH - 1, int(prefer_tx)))
+     top_y = _top_solid_pixel_y(world, prefer_tx)
+     center_x_px = prefer_tx * TILE_SIZE + TILE_SIZE // 2
+-    # Nudge the player one pixel above the surface so we never spawn inside a tile.
+-    # The subsequent ground-snap will drop us cleanly onto the grass.
+-    player.midbottom = (center_x_px, top_y - 1)
++    # Place the player exactly on top of the surface so we never embed.
++    # Gravity/snap will hold us grounded next frame.
++    player.midbottom = (center_x_px, top_y)
+ 
+@@ -680,17 +680,18 @@ def main():
+                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                     mx, my = pygame.mouse.get_pos()
+ 
+                     # Shop button = TELEPORT to shop scene (buying only there)
+                     if SHOP_BTN_RECT.collidepoint(mx, my):
+                         if run_shop is None:
+                             print("[world] Shop not available (shop_scene.py missing).")
+                         else:
+                             # Try flexible signatures for state handoff
+                             returned = None
+                             try:
+                                 returned = run_shop(screen, coins, inventory, tools_owned)
+                             except TypeError:
+                                 run_shop(screen)
+                             else:
+                                 if isinstance(returned, (list, tuple)) and len(returned) >= 3:
+                                     coins, inventory, tools_owned = returned[0], returned[1], returned[2]
+                                 elif isinstance(returned, dict):
+                                     coins = returned.get("coins", coins)
+                                     inventory = returned.get("inventory", inventory)
+                                     tools_owned = returned.get("tools_owned", tools_owned)
+ 
+-                            # On return, snap safely to surface and rebuild cached UI
++                            # On return, spawn safely and let physics settle
+                             spawn_player_on_surface(world, player)
+                             vy = 0.0
+-                            on_ground = True
++                            on_ground = False  # ensure snap/gravity can resolve cleanly
+                             player = push_player_out_of_solids(world, player)
+                             player, on_ground = snap_player_to_ground(world, player)
+                             build_shop_button_ui(screen)
+                         continue
