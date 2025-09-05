@@ -814,6 +814,8 @@ class HostileNPC:
 
     def draw(self, screen: pygame.Surface, cam_x: int, cam_y: int):
         rect = pygame.Rect(int(self.x - cam_x), int(self.y - cam_y), self.width, self.height)
+        if not rect.colliderect(screen.get_rect()):
+            return
         pygame.draw.rect(screen, NPC_COLOR, rect)
         # simple eyes for appearance
         eye_w = 3
@@ -1231,16 +1233,15 @@ def main():
 
     # Fog drawer
     def draw_fog():
-        start_x = camera_x // TILE_SIZE
-        end_x = (camera_x + SCREEN_WIDTH) // TILE_SIZE + 1
-        start_y = camera_y // TILE_SIZE
-        end_y = (camera_y + SCREEN_HEIGHT) // TILE_SIZE + 1
+        start_x = max(0, camera_x // TILE_SIZE)
+        end_x = min(WORLD_WIDTH, (camera_x + SCREEN_WIDTH) // TILE_SIZE + 1)
+        start_y = max(SURFACE_LEVEL, camera_y // TILE_SIZE)
+        end_y = min(WORLD_HEIGHT, (camera_y + SCREEN_HEIGHT) // TILE_SIZE + 1)
         for tx in range(start_x, end_x):
-            for ty in range(max(start_y, SURFACE_LEVEL), end_y):
-                if 0 <= tx < WORLD_WIDTH and 0 <= ty < WORLD_HEIGHT:
-                    if not revealed[tx][ty]:
-                        rect = pygame.Rect(tx * TILE_SIZE - camera_x, ty * TILE_SIZE - camera_y, TILE_SIZE, TILE_SIZE)
-                        screen.blit(fog_tile, rect.topleft)
+            for ty in range(start_y, end_y):
+                if not revealed[tx][ty]:
+                    rect = pygame.Rect(tx * TILE_SIZE - camera_x, ty * TILE_SIZE - camera_y, TILE_SIZE, TILE_SIZE)
+                    screen.blit(fog_tile, rect.topleft)
 
     def add_item(item_id: str, amount: int = 1):
         nonlocal minimap_dirty
@@ -1599,30 +1600,29 @@ def main():
 
         # Draw world
         screen.fill(SKY_BLUE)
-        start_x = camera_x // TILE_SIZE
-        end_x = (camera_x + SCREEN_WIDTH) // TILE_SIZE + 1
-        start_y = camera_y // TILE_SIZE
-        end_y = (camera_y + SCREEN_HEIGHT) // TILE_SIZE + 1
+        start_x = max(0, camera_x // TILE_SIZE)
+        end_x = min(WORLD_WIDTH, (camera_x + SCREEN_WIDTH) // TILE_SIZE + 1)
+        start_y = max(0, camera_y // TILE_SIZE)
+        end_y = min(WORLD_HEIGHT, (camera_y + SCREEN_HEIGHT) // TILE_SIZE + 1)
 
         for tx in range(start_x, end_x):
             for ty in range(start_y, end_y):
-                if 0 <= tx < WORLD_WIDTH and 0 <= ty < WORLD_HEIGHT:
-                    rect = pygame.Rect(tx * TILE_SIZE - camera_x, ty * TILE_SIZE - camera_y, TILE_SIZE, TILE_SIZE)
-                    pygame.draw.rect(screen, background[tx][ty], rect)
-                    tile = world[tx][ty]
-                    if tile:
-                        surf = pick_variant_surface(tile, tx, ty, tile_variants)
-                        if surf is not None:
-                            screen.blit(surf, rect.topleft)
-                    ftype = fluid_type[tx][ty]
-                    lvl = fluid_level[tx][ty]
-                    if lvl > 0 and ftype:
-                        h = int((lvl / 4.0) * TILE_SIZE)
-                        f_rect = pygame.Rect(rect.left, rect.bottom - h, TILE_SIZE, h)
-                        pygame.draw.rect(screen, FLUID_COLORS.get(ftype, (0,0,255)), f_rect)
-                    eff = mining_effects.get((tx, ty))
-                    if eff and (ty < SURFACE_LEVEL or revealed[tx][ty]):
-                        eff.draw(screen, camera_x, camera_y)
+                rect = pygame.Rect(tx * TILE_SIZE - camera_x, ty * TILE_SIZE - camera_y, TILE_SIZE, TILE_SIZE)
+                pygame.draw.rect(screen, background[tx][ty], rect)
+                tile = world[tx][ty]
+                if tile:
+                    surf = pick_variant_surface(tile, tx, ty, tile_variants)
+                    if surf is not None:
+                        screen.blit(surf, rect.topleft)
+                ftype = fluid_type[tx][ty]
+                lvl = fluid_level[tx][ty]
+                if lvl > 0 and ftype:
+                    h = int((lvl / 4.0) * TILE_SIZE)
+                    f_rect = pygame.Rect(rect.left, rect.bottom - h, TILE_SIZE, h)
+                    pygame.draw.rect(screen, FLUID_COLORS.get(ftype, (0,0,255)), f_rect)
+                eff = mining_effects.get((tx, ty))
+                if eff and (ty < SURFACE_LEVEL or revealed[tx][ty]):
+                    eff.draw(screen, camera_x, camera_y)
 
         # NPCs
         for npc in npcs:
