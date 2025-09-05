@@ -21,6 +21,39 @@ UI_FG       = (240, 240, 240)
 LEAVE_BG    = (30, 30, 30)
 LEAVE_FG    = (220, 220, 220)
 
+# Shop data -----------------------------------------------------------------
+
+# Tools for sale (id, label, price)
+BUY_ITEMS = [
+    ("wood_shovel", "Wood Shovel", 25),
+    ("metal_shovel", "Metal Shovel", 80),
+    ("stone_pick", "Stone Pickaxe", 45),
+    ("metal_pick", "Metal Pickaxe", 120),
+    ("sword", "Sword", 60),
+]
+
+# Durability for tools we can sell (mirrors platformer.TOOL_MAX_DUR)
+TOOL_MAX = {
+    "wood_shovel": 100,
+    "metal_shovel": 240,
+    "stone_pick": 160,
+    "metal_pick": 280,
+    "sword": 250,
+}
+
+# Resources that can be sold back to the shop (id -> (name, price))
+SELL_PRICES = {
+    "grass_item":   ("Grass", 1),
+    "dirt_item":    ("Dirt", 1),
+    "stone_item":   ("Stone", 2),
+    "coal_item":    ("Coal", 4),
+    "copper_item":  ("Copper", 6),
+    "iron_item":    ("Iron", 8),
+    "gold_item":    ("Gold", 15),
+    "emerald_item": ("Emerald", 25),
+    "diamond_item": ("Diamond", 40),
+}
+
 def _make_wood_tile() -> pygame.Surface:
     """Create a small wood plank tile to blit across the floor."""
     surf = pygame.Surface((TILE_SIZE, TILE_SIZE)).convert()
@@ -79,11 +112,17 @@ def _clamp_to_room(rect: pygame.Rect, room_px: Tuple[int, int]) -> pygame.Rect:
     if rect.bottom > h: rect.bottom = h
     return rect
 
-def run_shop(screen: pygame.Surface) -> None:
+def run_shop(screen: pygame.Surface,
+             coins: int,
+             inventory: dict[str, int],
+             tools_owned: dict[str, float | None]) -> tuple[int, dict[str, int], dict[str, float | None]]:
+    """Run the top-down shop scene.
+
+    The player can walk around, buy tools and sell mined resources.  Returns
+    updated ``coins``, ``inventory`` and ``tools_owned`` when the user leaves
+    the shop (via the button, Esc, or window close).
     """
-    Blocks and runs a top-down wood shop scene.
-    Returns to the caller (your world) when the user clicks 'Leave' or presses Esc.
-    """
+
     clock = pygame.time.Clock()
     sw, sh = screen.get_size()
     room_px = (ROOM_TILES[0] * TILE_SIZE, ROOM_TILES[1] * TILE_SIZE)
@@ -111,11 +150,14 @@ def run_shop(screen: pygame.Surface) -> None:
     ]
     obstacles = walls + benches
 
-    # Leave button
+    # Fonts / UI elements
     font = pygame.font.SysFont(None, 24)
+    small_font = pygame.font.SysFont(None, 20)
     leave_text = font.render("Leave Shop (Esc)", True, LEAVE_FG)
     leave_pad = 8
-    leave_rect = pygame.Rect(view_offset[0] + 10, view_offset[1] + 10, leave_text.get_width() + leave_pad*2, leave_text.get_height() + leave_pad*2)
+    leave_rect = pygame.Rect(view_offset[0] + 10, view_offset[1] + 10,
+                             leave_text.get_width() + leave_pad * 2,
+                             leave_text.get_height() + leave_pad * 2)
 
     # Player
     p_rect = _player_rect((room_px[0] * 0.5, room_px[1] * 0.75))
@@ -125,26 +167,58 @@ def run_shop(screen: pygame.Surface) -> None:
     while running:
         dt = clock.tick(60) / 1000.0
 
+        # Build button rects for current frame (needed for click detection)
+        buy_buttons: List[tuple[pygame.Rect, str, int]] = []
+        bx = sw - 220 - 10
+        by = 80
+        for i, (tid, label, price) in enumerate(BUY_ITEMS):
+            rect = pygame.Rect(bx, by + i * 30, 220, 26)
+            buy_buttons.append((rect, tid, price))
+
+        sell_buttons: List[tuple[pygame.Rect, str, int]] = []
+        sx = 10
+        sy = 80
+        for item_id, (label, price) in SELL_PRICES.items():
+            count = inventory.get(item_id, 0)
+            if count <= 0:
+                continue
+            rect = pygame.Rect(sx, sy + len(sell_buttons) * 30, 220, 26)
+            sell_buttons.append((rect, item_id, price))
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                # Bubble up quit to caller
                 running = False
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return
+                return coins, inventory, tools_owned
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
                 if leave_rect.collidepoint(mx, my):
-                    return
+                    return coins, inventory, tools_owned
+                for rect, item_id, price in sell_buttons:
+                    if rect.collidepoint(mx, my):
+                        if inventory.get(item_id, 0) > 0:
+                            inventory[item_id] -= 1
+                            if inventory[item_id] <= 0:
+                                inventory.pop(item_id, None)
+                            coins += price
+                        break
+                for rect, tid, price in buy_buttons:
+                    if rect.collidepoint(mx, my):
+                        if coins >= price:
+                            coins -= price
+                            tools_owned[tid] = float(TOOL_MAX.get(tid, 0))
+                        break
 
-        # Input
+        # Input for player movement
         keys = pygame.key.get_pressed()
-        dir_x = (1 if keys[pygame.K_RIGHT] or keys[pygame.K_d] else 0) - (1 if keys[pygame.K_LEFT] or keys[pygame.K_a] else 0)
-        dir_y = (1 if keys[pygame.K_DOWN] or keys[pygame.K_s] else 0) - (1 if keys[pygame.K_UP] or keys[pygame.K_w] else 0)
+        dir_x = (1 if keys[pygame.K_RIGHT] or keys[pygame.K_d] else 0) - (
+            1 if keys[pygame.K_LEFT] or keys[pygame.K_a] else 0)
+        dir_y = (1 if keys[pygame.K_DOWN] or keys[pygame.K_s] else 0) - (
+            1 if keys[pygame.K_UP] or keys[pygame.K_w] else 0)
         move_dir = pygame.Vector2(dir_x, dir_y)
         if move_dir.length_squared() > 0:
             move_dir = move_dir.normalize()
             target = move_dir * PLAYER_SPEED
-            # accelerate toward target
             dv = target - vel
             step = PLAYER_ACCEL * dt
             if dv.length() <= step:
@@ -152,7 +226,6 @@ def run_shop(screen: pygame.Surface) -> None:
             else:
                 vel += dv.normalize() * step
         else:
-            # friction to stop
             speed = vel.length()
             if speed > 0:
                 drop = PLAYER_FRICTION * dt
@@ -179,16 +252,38 @@ def run_shop(screen: pygame.Surface) -> None:
 
         # Player (top-down marker)
         pr = p_rect.move(view_offset)
-        pygame.draw.rect(screen, (240, 230, 120), pr)  # simple rectangle avatar
-        # small direction dot
+        pygame.draw.rect(screen, (240, 230, 120), pr)
         pygame.draw.circle(screen, (20, 20, 20), (pr.centerx, pr.top + 3), 2)
 
-        # UI: Leave button
+        # UI: panels ---------------------------------------------------------
+        # Leave button
         pygame.draw.rect(screen, LEAVE_BG, leave_rect, border_radius=6)
         screen.blit(leave_text, (leave_rect.x + leave_pad, leave_rect.y + leave_pad))
 
+        # Coins text
+        c_txt = font.render(f"Coins: {coins}", True, UI_FG)
+        screen.blit(c_txt, (sw // 2 - c_txt.get_width() // 2, 20))
+
+        # Buy panel
+        for rect, tid, price in buy_buttons:
+            pygame.draw.rect(screen, (40, 40, 40), rect)
+            label = next(l for t, l, p in BUY_ITEMS if t == tid)
+            txt = small_font.render(f"Buy {label} - {price}c", True, UI_FG)
+            screen.blit(txt, (rect.x + 4, rect.y + 4))
+
+        # Sell panel
+        for rect, item_id, price in sell_buttons:
+            name = SELL_PRICES[item_id][0]
+            count = inventory.get(item_id, 0)
+            pygame.draw.rect(screen, (40, 40, 40), rect)
+            txt = small_font.render(f"Sell {name} x{count} - {price}c", True, UI_FG)
+            screen.blit(txt, (rect.x + 4, rect.y + 4))
+
         # Caption
-        cap = font.render("Wood Shop (Top-Down)", True, UI_FG)
-        screen.blit(cap, (view_offset[0] + 12, view_offset[1] + leave_rect.height + 16))
+        cap = font.render("Wood Shop", True, UI_FG)
+        screen.blit(cap, (sw // 2 - cap.get_width() // 2, 50))
 
         pygame.display.flip()
+
+    # Window closed -> return state
+    return coins, inventory, tools_owned
