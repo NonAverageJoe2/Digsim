@@ -550,9 +550,9 @@ def spawn_player_on_surface(world, player: pygame.Rect, prefer_tx: int | None = 
     prefer_tx = max(0, min(WORLD_WIDTH - 1, int(prefer_tx)))
     top_y = _top_solid_pixel_y(world, prefer_tx)
     center_x_px = prefer_tx * TILE_SIZE + TILE_SIZE // 2
-    # Nudge the player one pixel above the surface so we never spawn inside a tile.
-    # The subsequent ground-snap will drop us cleanly onto the grass.
-    player.midbottom = (center_x_px, top_y - 1)
+    # Correct: bottom sits at top_y, not inside
+    player.midbottom = (center_x_px, top_y)
+
 
 # ------------- Unstick helpers (safe after teleport) --------------------------
 def push_player_out_of_solids(world, rect: pygame.Rect) -> pygame.Rect:
