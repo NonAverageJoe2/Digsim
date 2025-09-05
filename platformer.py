@@ -158,6 +158,11 @@ MINIMAP_H = 180
 MINIMAP_PAD = 10
 MINIMAP_BG = (10, 10, 10, 220)
 
+# Lighting & lantern
+MAX_DARK_DEPTH = 40          # tiles below surface to reach full darkness
+LANTERN_BRIGHTNESS = 120     # alpha reduction when lantern enabled
+LANTERN_HINT_ALPHA = 100     # show hint when ambient darkness exceeds this alpha
+
 # Skills scaling
 ENDURANCE_STAM_PER_LVL = 10            # +Max Stamina per level
 ENDURANCE_DURA_REDUCT_PER_LVL = 0.005  # -0.5% durability loss per level
@@ -186,6 +191,8 @@ ITEMS = {
     "wood_shovel":  {"type": "tool", "name": "Wood Shovel",   "color": (170, 130, 70),  "desc": "Simple shovel for digging soft blocks."},
     "metal_shovel": {"type": "tool", "name": "Metal Shovel",  "color": (190, 190, 215), "desc": "Durable shovel that digs quickly."},
     "sword":        {"type": "tool", "name": "Sword",         "color": (210, 210, 230), "desc": "Balanced blade for close combat."},
+
+    "lantern":      {"type": "accessory", "name": "Lantern",      "color": (255, 220, 100), "desc": "Provides light in dark places."},
 
     "hp_potion":    {"type": "consumable", "name": "HP Potion",   "color": (210, 60, 60),  "desc": "Restores a portion of health."},
     "stam_potion":  {"type": "consumable", "name": "Stam Potion", "color": (70, 200, 110), "desc": "Refills stamina for mining."},
@@ -819,11 +826,29 @@ def wrap_text(text: str, font: pygame.font.Font, max_width: int) -> list[str]:
     return lines
 
 def draw_hotbar(screen: pygame.Surface, font: pygame.font.Font,
-                slots: list[str | None], selected_idx: int):
+                slots: list[str | None], selected_idx: int,
+                accessory: str | None, lantern_on: bool, hint: bool):
     sw, sh = screen.get_size()
     total_w = HOTBAR_SLOTS * SLOT_SIZE + (HOTBAR_SLOTS - 1) * SLOT_GAP
     x0 = (sw - total_w) // 2
     y0 = sh - HOTBAR_H
+
+    # Accessory slot (e.g., lantern) to the left
+    acc_gap = SLOT_GAP * 3
+    acc_rect = pygame.Rect(x0 - acc_gap - SLOT_SIZE, y0, SLOT_SIZE, SLOT_SIZE)
+    pygame.draw.rect(screen, (35,35,35), acc_rect, border_radius=8)
+    border_col = (230,230,120) if lantern_on else (120,120,120)
+    border_w = 2 if lantern_on else 1
+    if hint and not lantern_on:
+        border_col = (230,230,120)
+        border_w = 2
+    pygame.draw.rect(screen, border_col, acc_rect, border_w, border_radius=8)
+    if accessory:
+        draw_item_icon(screen, acc_rect, accessory)
+    q_txt = font.render("Q", True, (220,220,220))
+    screen.blit(q_txt, (acc_rect.x + 4, acc_rect.y + 2))
+
+    # Main hotbar strip
     strip = pygame.Rect(x0 - HOTBAR_PAD, y0 - HOTBAR_PAD, total_w + HOTBAR_PAD*2, SLOT_SIZE + HOTBAR_PAD*2)
     pygame.draw.rect(screen, (20, 20, 20), strip, border_radius=12)
     pygame.draw.rect(screen, (90, 90, 90), strip, 1, border_radius=12)
@@ -842,6 +867,7 @@ def draw_hotbar(screen: pygame.Surface, font: pygame.font.Font,
 
 def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
                    inv: dict[str,int], tools_owned: dict[str, float],
+                   armor_item: str | None, accessory_item: str | None,
                    selected_hotbar_slot: int, open_panel: bool,
                    strength_lvl: int):
     sw, sh = screen.get_size()
@@ -853,7 +879,7 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
     hovered_rect: pygame.Rect | None = None
 
     panel_w = INV_PAD*2 + INV_COLS*INV_CELL + (INV_COLS-1)*6
-    panel_h = INV_PAD*2 + INV_ROWS*INV_CELL + (INV_ROWS-1)*6 + 54
+    panel_h = INV_PAD*2 + INV_ROWS*INV_CELL + (INV_ROWS-1)*6 + 120
     panel = pygame.Rect(10, sh - HOTBAR_H - 56 - panel_h - 8, panel_w, panel_h)
     pygame.draw.rect(screen, (18,18,18), panel, border_radius=10)
     pygame.draw.rect(screen, (120,120,120), panel, 1, border_radius=10)
@@ -861,12 +887,30 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
     title = font.render(f"Inventory  {total_items(inv)}/{capacity_for_strength(strength_lvl)}", True, (235,235,235))
     screen.blit(title, (panel.x + 12, panel.y + 8))
 
+    # Armor placeholder
+    armor_text = font.render("Armor:", True, (220,220,220))
+    screen.blit(armor_text, (panel.x + 12, panel.y + 28))
+    armor_rect = pygame.Rect(panel.x + 70, panel.y + 24, 30, 30)
+    pygame.draw.rect(screen, (35,35,35), armor_rect, border_radius=6)
+    pygame.draw.rect(screen, (80,80,80), armor_rect, 1, border_radius=6)
+    if armor_item:
+        draw_item_icon(screen, armor_rect, armor_item)
+
+    # Accessory slot (lantern etc.)
+    acc_text = font.render("Accessory:", True, (220,220,220))
+    screen.blit(acc_text, (panel.x + 12, panel.y + 64))
+    acc_rect = pygame.Rect(panel.x + 100, panel.y + 60, 30, 30)
+    pygame.draw.rect(screen, (35,35,35), acc_rect, border_radius=6)
+    pygame.draw.rect(screen, (80,80,80), acc_rect, 1, border_radius=6)
+    if accessory_item:
+        draw_item_icon(screen, acc_rect, accessory_item)
+
     # Tools row
     tool_text = font.render("Tools:", True, (220,220,220))
-    screen.blit(tool_text, (panel.x + 12, panel.y + 28))
+    screen.blit(tool_text, (panel.x + 12, panel.y + 100))
     tool_cells = []
     tx = panel.x + 70
-    ty = panel.y + 24
+    ty = panel.y + 96
     for tool_id, dur in tools_owned.items():
         if tool_id == "hand":  # skip, always available
             continue
@@ -890,7 +934,7 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
 
     # Items grid (resources/potions)
     clickable_cells = []
-    y = panel.y + 72
+    y = panel.y + 140
     idx = 0
     for r in range(INV_ROWS):
         x = panel.x + INV_PAD
@@ -1086,6 +1130,12 @@ def main():
         "wood_pick": float(TOOL_MAX_DUR["wood_pick"]),
     }
 
+    # Equipment
+    armor_item: str | None = None
+    accessory_item: str | None = "lantern"
+    lantern_on = False
+    lantern_hint = False
+
     # Hotbar
     hotbar: list[str | None] = ["hand", "wood_pick", None, None]
     selected_slot = 0
@@ -1185,6 +1235,9 @@ def main():
                     minimap_open = not minimap_open
                 elif event.key == pygame.K_h:
                     take_damage(12.0)
+                elif event.key == pygame.K_q:
+                    if accessory_item == "lantern":
+                        lantern_on = not lantern_on
                 elif event.key == pygame.K_b:
                     if run_shop is None:
                         print("[world] Shop not available (shop_scene.py missing).")
@@ -1254,7 +1307,7 @@ def main():
                     continue
 
                 # Inventory / Skills panel clicks (tools & item cells)
-                inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, selected_slot, inventory_open, strength_lvl)
+                inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, armor_item, accessory_item, selected_slot, inventory_open, strength_lvl)
                 skill_clicks = draw_skills(screen, font, skills_open, strength_lvl, endurance_lvl, speed_lvl, skill_points)
 
                 consumed = False
@@ -1466,6 +1519,18 @@ def main():
         if FOG_BLOCKS_PLAYER:
             draw_fog()
 
+        # Ambient lighting
+        depth_tiles = player.bottom // TILE_SIZE - SURFACE_LEVEL
+        dark_ratio = clamp(depth_tiles / MAX_DARK_DEPTH, 0.0, 1.0)
+        dark_alpha = int(200 * dark_ratio)
+        if lantern_on:
+            dark_alpha = max(0, dark_alpha - LANTERN_BRIGHTNESS)
+        lantern_hint = dark_alpha >= LANTERN_HINT_ALPHA and not lantern_on
+        if dark_alpha > 0:
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0,0,0,dark_alpha))
+            screen.blit(overlay, (0,0))
+
         # Minimap small + buttons under it
         mini_rect = draw_minimap_small(screen, minimap)
         btn_w, btn_h, gap = 110, 24, 6
@@ -1486,10 +1551,10 @@ def main():
         screen.blit(c_txt, (coin_rect.x, coin_rect.y + (coin_rect.height - c_txt.get_height())//2))
 
         # Hotbar (always)
-        draw_hotbar(screen, font, hotbar, selected_slot)
+        draw_hotbar(screen, font, hotbar, selected_slot, accessory_item, lantern_on, lantern_hint)
 
         # Panels
-        inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, selected_slot, inventory_open, strength_lvl)
+        inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, armor_item, accessory_item, selected_slot, inventory_open, strength_lvl)
         skill_clicks = draw_skills(screen, font, skills_open, strength_lvl, endurance_lvl, speed_lvl, skill_points)
 
         pygame.display.flip()
