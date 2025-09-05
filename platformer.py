@@ -228,6 +228,22 @@ ITEMS = {
     "gold_item":    {"type": "res",  "name": "Gold",          "color": TILE_COLORS[GOLD],    "desc": "Valuable shiny metal."},
     "emerald_item": {"type": "res",  "name": "Emerald",       "color": TILE_COLORS[EMERALD], "desc": "Rare green gemstone."},
     "diamond_item": {"type": "res",  "name": "Diamond",       "color": TILE_COLORS[DIAMOND], "desc": "Extremely hard blue gem."},
+
+    # Armor pieces
+    "padded_hat":    {"type": "armor", "name": "Padded Hat",    "slot": "head", "dr": 0.10, "color": (200, 200, 180), "desc": "Soft hat that blocks 10% damage."},
+    "padded_tunic":  {"type": "armor", "name": "Padded Tunic",  "slot": "body", "dr": 0.10, "color": (200, 200, 170), "desc": "Simple tunic blocking 10% damage."},
+    "padded_pants":  {"type": "armor", "name": "Padded Pants",  "slot": "legs", "dr": 0.10, "color": (200, 200, 160), "desc": "Padded pants blocking 10% damage."},
+    "padded_boots":  {"type": "armor", "name": "Padded Boots",  "slot": "feet", "dr": 0.10, "color": (200, 200, 150), "desc": "Padded boots blocking 10% damage."},
+
+    "chain_helmet":  {"type": "armor", "name": "Chain Helmet",  "slot": "head", "dr": 0.25, "color": (150, 150, 150), "desc": "Chainmail helm blocking 25% damage."},
+    "chain_chest":   {"type": "armor", "name": "Chain Chest",   "slot": "body", "dr": 0.25, "color": (150, 150, 160), "desc": "Chainmail chest blocking 25% damage."},
+    "chain_legs":    {"type": "armor", "name": "Chain Leggings", "slot": "legs", "dr": 0.25, "color": (150, 150, 170), "desc": "Chainmail leggings blocking 25% damage."},
+    "chain_boots":   {"type": "armor", "name": "Chain Boots",   "slot": "feet", "dr": 0.25, "color": (150, 150, 180), "desc": "Chainmail boots blocking 25% damage."},
+
+    "plated_helmet": {"type": "armor", "name": "Plated Helmet", "slot": "head", "dr": 0.50, "color": (180, 180, 190), "desc": "Heavy plated helmet blocking 50% damage."},
+    "plated_chest":  {"type": "armor", "name": "Plated Chest",  "slot": "body", "dr": 0.50, "color": (180, 180, 200), "desc": "Plated chest blocking 50% damage."},
+    "plated_legs":   {"type": "armor", "name": "Plated Greaves", "slot": "legs", "dr": 0.50, "color": (180, 180, 210), "desc": "Plated leg guards blocking 50% damage."},
+    "plated_boots":  {"type": "armor", "name": "Plated Boots",  "slot": "feet", "dr": 0.50, "color": (180, 180, 220), "desc": "Plated boots blocking 50% damage."},
 }
 
 # Tool mining speed factor (duration is divided by this)
@@ -947,7 +963,7 @@ def draw_hotbar(screen: pygame.Surface, font: pygame.font.Font,
 
 def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
                    inv: dict[str,int], tools_owned: dict[str, float],
-                   armor_item: str | None, accessory_item: str | None,
+                   armor_items: dict[str, str | None], accessory_item: str | None,
                    selected_hotbar_slot: int, open_panel: bool,
                    strength_lvl: int):
     sw, sh = screen.get_size()
@@ -967,14 +983,18 @@ def draw_inventory(screen: pygame.Surface, font: pygame.font.Font,
     title = font.render(f"Inventory  {total_items(inv)}/{capacity_for_strength(strength_lvl)}", True, (235,235,235))
     screen.blit(title, (panel.x + 12, panel.y + 8))
 
-    # Armor placeholder
+    # Armor slots
     armor_text = font.render("Armor:", True, (220,220,220))
     screen.blit(armor_text, (panel.x + 12, panel.y + 28))
-    armor_rect = pygame.Rect(panel.x + 70, panel.y + 24, 30, 30)
-    pygame.draw.rect(screen, (35,35,35), armor_rect, border_radius=6)
-    pygame.draw.rect(screen, (80,80,80), armor_rect, 1, border_radius=6)
-    if armor_item:
-        draw_item_icon(screen, armor_rect, armor_item)
+    armor_rects: list[pygame.Rect] = []
+    for i, slot in enumerate(["head", "body", "legs", "feet"]):
+        r = pygame.Rect(panel.x + 70 + i*38, panel.y + 24, 30, 30)
+        pygame.draw.rect(screen, (35,35,35), r, border_radius=6)
+        pygame.draw.rect(screen, (80,80,80), r, 1, border_radius=6)
+        item_id = armor_items.get(slot)
+        if item_id:
+            draw_item_icon(screen, r, item_id)
+        armor_rects.append(r)
 
     # Accessory slot (lantern etc.)
     acc_text = font.render("Accessory:", True, (220,220,220))
@@ -1213,7 +1233,7 @@ def main():
     }
 
     # Equipment
-    armor_item: str | None = None
+    armor_items: dict[str, str | None] = {"head": None, "body": None, "legs": None, "feet": None}
     accessory_item: str | None = "lantern"
     lantern_on = False
     lantern_hint = False
@@ -1278,7 +1298,12 @@ def main():
 
     def take_damage(amount: float):
         nonlocal hp, hp_regen_cd
-        hp = max(0.0, hp - amount)
+        dmg = amount
+        for item_id in armor_items.values():
+            if item_id:
+                info = ITEMS.get(item_id, {})
+                dmg *= max(0.0, 1.0 - info.get("dr", 0.0))
+        hp = max(0.0, hp - dmg)
         hp_regen_cd = HP_REGEN_DELAY
 
     def apply_tool_wear_on_mine(tile_type: str):
@@ -1325,16 +1350,17 @@ def main():
                     else:
                         returned = None
                         try:
-                            returned = run_shop(screen, coins, inventory, tools_owned)
+                            returned = run_shop(screen, coins, inventory, tools_owned, armor_items)
                         except TypeError:
                             run_shop(screen)
                         else:
-                            if isinstance(returned, (list, tuple)) and len(returned) >= 3:
-                                coins, inventory, tools_owned = returned[0], returned[1], returned[2]
+                            if isinstance(returned, (list, tuple)) and len(returned) >= 4:
+                                coins, inventory, tools_owned, armor_items = returned[0], returned[1], returned[2], returned[3]
                             elif isinstance(returned, dict):
                                 coins = returned.get("coins", coins)
                                 inventory = returned.get("inventory", inventory)
                                 tools_owned = returned.get("tools_owned", tools_owned)
+                                armor_items = returned.get("armor", armor_items)
                         spawn_player_on_surface(world, player)
                         vy = 0.0
                         on_ground = True
@@ -1353,18 +1379,19 @@ def main():
                         # Try flexible signatures for state handoff
                         returned = None
                         try:
-                            returned = run_shop(screen, coins, inventory, tools_owned)
+                            returned = run_shop(screen, coins, inventory, tools_owned, armor_items)
                         except TypeError:
                             # fall back to legacy signature
                             run_shop(screen)
                         else:
                             # apply returned state if provided
-                            if isinstance(returned, (list, tuple)) and len(returned) >= 3:
-                                coins, inventory, tools_owned = returned[0], returned[1], returned[2]
+                            if isinstance(returned, (list, tuple)) and len(returned) >= 4:
+                                coins, inventory, tools_owned, armor_items = returned[0], returned[1], returned[2], returned[3]
                             elif isinstance(returned, dict):
                                 coins = returned.get("coins", coins)
                                 inventory = returned.get("inventory", inventory)
                                 tools_owned = returned.get("tools_owned", tools_owned)
+                                armor_items = returned.get("armor", armor_items)
 
                         # On return, snap safely to surface and rebuild cached UI
                         spawn_player_on_surface(world, player)
@@ -1388,7 +1415,7 @@ def main():
                     continue
 
                 # Inventory / Skills panel clicks (tools & item cells)
-                inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, armor_item, accessory_item, selected_slot, inventory_open, strength_lvl)
+                inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, armor_items, accessory_item, selected_slot, inventory_open, strength_lvl)
                 skill_clicks = draw_skills(screen, font, skills_open, strength_lvl, endurance_lvl, speed_lvl, skill_points)
 
                 consumed = False
@@ -1679,7 +1706,7 @@ def main():
         draw_hotbar(screen, font, hotbar, selected_slot, accessory_item, lantern_on, lantern_hint)
 
         # Panels
-        inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, armor_item, accessory_item, selected_slot, inventory_open, strength_lvl)
+        inv_cells, tool_cells = draw_inventory(screen, font, inventory, tools_owned, armor_items, accessory_item, selected_slot, inventory_open, strength_lvl)
         skill_clicks = draw_skills(screen, font, skills_open, strength_lvl, endurance_lvl, speed_lvl, skill_points)
 
         pygame.display.flip()
