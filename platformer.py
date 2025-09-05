@@ -183,6 +183,8 @@ MINIMAP_BG = (10, 10, 10, 220)
 MAX_DARK_DEPTH = 40          # tiles below surface to reach full darkness
 LANTERN_BRIGHTNESS = 120     # alpha reduction when lantern enabled
 LANTERN_HINT_ALPHA = 100     # show hint when ambient darkness exceeds this alpha
+LIGHT_RADIUS = 80            # radius of visibility without lantern (pixels)
+LANTERN_LIGHT_RADIUS = 160   # radius of visibility with lantern (pixels)
 
 # Skills scaling
 ENDURANCE_STAM_PER_LVL = 10            # +Max Stamina per level
@@ -1562,6 +1564,8 @@ def main():
                     tile_type = world[tx][ty]
                     world[tx][ty] = None
                     reveal_tile(revealed, tx, ty)
+                    # Flood reveal any newly exposed caverns
+                    reveal_cave(revealed, world, tx, ty)
                     reveal_neighbors4(revealed, tx, ty)
                     for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
                         nx, ny = tx + dx, ty + dy
@@ -1675,13 +1679,19 @@ def main():
         depth_tiles = player.bottom // TILE_SIZE - SURFACE_LEVEL
         dark_ratio = clamp(depth_tiles / MAX_DARK_DEPTH, 0.0, 1.0)
         dark_alpha = int(200 * dark_ratio)
-        if lantern_on:
-            dark_alpha = max(0, dark_alpha - LANTERN_BRIGHTNESS)
         lantern_hint = dark_alpha >= LANTERN_HINT_ALPHA and not lantern_on
         if dark_alpha > 0:
             overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0,0,0,dark_alpha))
-            screen.blit(overlay, (0,0))
+            overlay.fill((0, 0, 0, dark_alpha))
+            radius = LANTERN_LIGHT_RADIUS if lantern_on else LIGHT_RADIUS
+            light = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            for r in range(radius, 0, -4):
+                alpha = int(dark_alpha * (r / radius))
+                pygame.draw.circle(light, (0, 0, 0, alpha), (radius, radius), r)
+            px = player.centerx - camera_x
+            py = player.centery - camera_y
+            overlay.blit(light, (px - radius, py - radius), special_flags=pygame.BLEND_RGBA_SUB)
+            screen.blit(overlay, (0, 0))
 
         # Minimap small + buttons under it
         mini_rect = draw_minimap_small(screen, minimap)
