@@ -1,5 +1,6 @@
 import math
 import random
+from collections import deque
 import pygame
 import colorsys
 
@@ -44,6 +45,14 @@ EMERALD = 'emerald'
 DIAMOND = 'diamond'
 BEDROCK = 'bedrock'
 TILE_TYPES = [GRASS, DIRT, STONE, COAL, COPPER, IRON, GOLD, EMERALD, DIAMOND, BEDROCK]
+
+# Fluids
+WATER = 'water'
+LAVA = 'lava'
+FLUID_COLORS = {
+    WATER: (64, 64, 255),
+    LAVA: (255, 100, 0),
+}
 
 # Colors (base + background)
 TILE_COLORS = {
@@ -461,6 +470,19 @@ def generate_world():
 
     return world, background
 
+def generate_caves(world, background):
+    """Carve random walk caves inside the stone layers."""
+    for _ in range(40):
+        x = random.randint(0, WORLD_WIDTH - 1)
+        y = random.randint(SURFACE_LEVEL + 5, WORLD_HEIGHT - 5)
+        for _ in range(200):
+            if 0 <= x < WORLD_WIDTH and SURFACE_LEVEL < y < WORLD_HEIGHT - 1:
+                world[x][y] = None
+                background[x][y] = BG_COLORS[STONE]
+            dx, dy = random.choice([(1,0),(-1,0),(0,1),(0,-1)])
+            x += dx
+            y += dy
+
 def init_revealed(world):
     revealed = [[False for _ in range(WORLD_HEIGHT)] for _ in range(WORLD_WIDTH)]
     for x in range(WORLD_WIDTH):
@@ -479,6 +501,25 @@ def reveal_neighbors4(revealed, x, y):
     reveal_tile(revealed, x - 1, y)
     reveal_tile(revealed, x, y + 1)
     reveal_tile(revealed, x, y - 1)
+
+def reveal_cave(revealed, world, sx, sy):
+    """Flood-reveal connected empty tiles starting from (sx, sy)."""
+    if not (0 <= sx < WORLD_WIDTH and 0 <= sy < WORLD_HEIGHT):
+        return
+    if world[sx][sy] is not None:
+        return
+    q = deque([(sx, sy)])
+    while q:
+        x, y = q.popleft()
+        if not (0 <= x < WORLD_WIDTH and 0 <= y < WORLD_HEIGHT):
+            continue
+        if revealed[x][y]:
+            continue
+        revealed[x][y] = True
+        for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < WORLD_WIDTH and 0 <= ny < WORLD_HEIGHT and world[nx][ny] is None:
+                q.append((nx, ny))
 
 def solid_at(world, tx, ty):
     if 0 <= tx < WORLD_WIDTH and 0 <= ty < WORLD_HEIGHT:
@@ -518,6 +559,80 @@ def color_for_tile(tile_type: str) -> tuple[int, int, int]:
     s = 0.35; v = 1.0
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     return (int(r*255), int(g*255), int(b*255))
+
+def spawn_fluids(world):
+    """Spawn clustered water and lava pools."""
+    ftype = [[None for _ in range(WORLD_HEIGHT)] for _ in range(WORLD_WIDTH)]
+    flevel = [[0 for _ in range(WORLD_HEIGHT)] for _ in range(WORLD_WIDTH)]
+
+    def cluster(cx, cy, fluid, size):
+        if world[cx][cy] is not None:
+            return
+        q = deque([(cx, cy)])
+        visited = set()
+        count = 0
+        while q and count < size:
+            x, y = q.popleft()
+            if (x, y) in visited:
+                continue
+            visited.add((x, y))
+            if not (0 <= x < WORLD_WIDTH and 0 <= y < WORLD_HEIGHT):
+                continue
+            if world[x][y] is None:
+                ftype[x][y] = fluid
+                flevel[x][y] = 4
+                count += 1
+                for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
+                    q.append((x+dx, y+dy))
+
+    for _ in range(10):
+        cx = random.randint(0, WORLD_WIDTH-1)
+        cy = random.randint(SURFACE_LEVEL+3, WORLD_HEIGHT//2)
+        cluster(cx, cy, WATER, random.randint(5,12))
+    for _ in range(6):
+        cx = random.randint(0, WORLD_WIDTH-1)
+        cy = random.randint(WORLD_HEIGHT//2, WORLD_HEIGHT-3)
+        cluster(cx, cy, LAVA, random.randint(5,12))
+    return ftype, flevel
+
+def update_fluids(world, ftype, flevel):
+    """Very simple fluid spreading with 4 units per tile."""
+    new_type = [row[:] for row in ftype]
+    new_lvl = [row[:] for row in flevel]
+    for x in range(WORLD_WIDTH):
+        for y in range(WORLD_HEIGHT-1, -1, -1):
+            t = ftype[x][y]
+            lvl = flevel[x][y]
+            if not t or lvl <= 0:
+                continue
+            # Flow down
+            if y+1 < WORLD_HEIGHT and world[x][y+1] is None:
+                space = 4 - new_lvl[x][y+1]
+                if space > 0:
+                    move = min(lvl, space)
+                    new_lvl[x][y] -= move
+                    new_lvl[x][y+1] += move
+                    new_type[x][y+1] = t
+                    if new_lvl[x][y] <= 0:
+                        new_type[x][y] = None
+                    continue
+            # Spread sideways
+            for dx in (-1, 1):
+                nx = x + dx
+                if 0 <= nx < WORLD_WIDTH and world[nx][y] is None:
+                    space = (lvl - 1) - new_lvl[nx][y]
+                    if space > 0:
+                        move = min(space, lvl)
+                        new_lvl[x][y] -= move
+                        new_lvl[nx][y] += move
+                        new_type[nx][y] = t
+                        if new_lvl[x][y] <= 0:
+                            new_type[x][y] = None
+                        lvl = new_lvl[x][y]
+    for x in range(WORLD_WIDTH):
+        for y in range(WORLD_HEIGHT):
+            flevel[x][y] = new_lvl[x][y]
+            ftype[x][y] = new_type[x][y]
 
 def stamina_regen_rate(current: float, max_value: float) -> float:
     if max_value <= 0: return 0.0
@@ -915,6 +1030,8 @@ def main():
 
     tile_variants = build_tile_variants()
     world, background = generate_world()
+    generate_caves(world, background)
+    fluid_type, fluid_level = spawn_fluids(world)
     revealed = init_revealed(world)
 
     fog_tile = pygame.Surface((TILE_SIZE, TILE_SIZE), pygame.SRCALPHA)
@@ -1269,6 +1386,10 @@ def main():
                     world[tx][ty] = None
                     reveal_tile(revealed, tx, ty)
                     reveal_neighbors4(revealed, tx, ty)
+                    for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
+                        nx, ny = tx + dx, ty + dy
+                        if 0 <= nx < WORLD_WIDTH and 0 <= ny < WORLD_HEIGHT and world[nx][ny] is None and not revealed[nx][ny]:
+                            reveal_cave(revealed, world, nx, ny)
                     # Give resource
                     item_id = tile_to_item(tile_type)
                     if item_id:
@@ -1300,6 +1421,8 @@ def main():
                 hregen = health_regen_rate(hp, hp_max)
                 hp = min(hp_max, hp + hregen * dt)
 
+        update_fluids(world, fluid_type, fluid_level)
+
         # Draw world
         screen.fill(SKY_BLUE)
         start_x = camera_x // TILE_SIZE
@@ -1317,6 +1440,12 @@ def main():
                         surf = pick_variant_surface(tile, tx, ty, tile_variants)
                         if surf is not None:
                             screen.blit(surf, rect.topleft)
+                    ftype = fluid_type[tx][ty]
+                    lvl = fluid_level[tx][ty]
+                    if lvl > 0 and ftype:
+                        h = int((lvl / 4.0) * TILE_SIZE)
+                        f_rect = pygame.Rect(rect.left, rect.bottom - h, TILE_SIZE, h)
+                        pygame.draw.rect(screen, FLUID_COLORS.get(ftype, (0,0,255)), f_rect)
                     eff = mining_effects.get((tx, ty))
                     if eff and (ty < SURFACE_LEVEL or revealed[tx][ty]):
                         eff.draw(screen, camera_x, camera_y)
