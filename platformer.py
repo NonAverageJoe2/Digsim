@@ -114,6 +114,27 @@ HP_REGEN_DELAY = 5.0
 FOG_RGBA = (30, 30, 30, 255)
 FOG_BLOCKS_PLAYER = True
 
+# Hostile NPC settings
+NPC_W = 28
+NPC_H = 40
+NPC_COLOR = (180, 60, 60)
+NPC_EYE_COLOR = (0, 0, 0)
+NPC_MAX_HP = 20
+NPC_SPEED = 60
+NPC_CONTACT_DAMAGE = 8
+NPC_SPAWN_RATE = 0.5  # spawns per second in pitch black
+NPC_SHOW_BAR_TIME = 2.0
+PITCH_BLACK_ALPHA = 180
+TOOL_DAMAGE = {
+    "hand": 1,
+    "wood_pick": 2,
+    "stone_pick": 3,
+    "metal_pick": 4,
+    "wood_shovel": 2,
+    "metal_shovel": 3,
+    "sword": 8,
+}
+
 # Texture variety
 VARIANTS_PER_TILE = {
     GRASS: 6, DIRT: 6, STONE: 6,
@@ -759,6 +780,63 @@ class MiningEffect:
             self._draw_pretty_line(fx, TILE_SIZE // 2, TILE_SIZE // 2, ex, ey)
         surface.blit(fx, (cx - TILE_SIZE // 2, cy - TILE_SIZE // 2))
 
+
+class HostileNPC:
+    def __init__(self, x: float, y: float):
+        self.x = float(x)
+        self.y = float(y)
+        self.width = NPC_W
+        self.height = NPC_H
+        self.hp = float(NPC_MAX_HP)
+        self.max_hp = float(NPC_MAX_HP)
+        self.show_bar = 0.0
+        self.attack_cd = 0.0
+
+    @property
+    def rect(self) -> pygame.Rect:
+        return pygame.Rect(int(self.x), int(self.y), self.width, self.height)
+
+    def update(self, dt: float, player: pygame.Rect):
+        # movement towards player
+        px, py = player.centerx, player.centery
+        cx, cy = self.rect.centerx, self.rect.centery
+        dx, dy = px - cx, py - cy
+        dist = math.hypot(dx, dy)
+        if dist > 0:
+            vx = dx / dist * NPC_SPEED
+            vy = dy / dist * NPC_SPEED
+            self.x += vx * dt
+            self.y += vy * dt
+        if self.attack_cd > 0.0:
+            self.attack_cd = max(0.0, self.attack_cd - dt)
+        if self.show_bar > 0.0:
+            self.show_bar = max(0.0, self.show_bar - dt)
+
+    def draw(self, screen: pygame.Surface, cam_x: int, cam_y: int):
+        rect = pygame.Rect(int(self.x - cam_x), int(self.y - cam_y), self.width, self.height)
+        pygame.draw.rect(screen, NPC_COLOR, rect)
+        # simple eyes for appearance
+        eye_w = 3
+        eye_h = 3
+        pygame.draw.rect(screen, NPC_EYE_COLOR, (rect.x + 6, rect.y + 10, eye_w, eye_h))
+        pygame.draw.rect(screen, NPC_EYE_COLOR, (rect.right - 6 - eye_w, rect.y + 10, eye_w, eye_h))
+        if self.show_bar > 0.0 and self.hp < self.max_hp:
+            bw = rect.width
+            bh = 4
+            bar_rect = pygame.Rect(rect.x, rect.y - 8, bw, bh)
+            pygame.draw.rect(screen, BAR_BG_COLOR, bar_rect)
+            fill_w = int(bw * (self.hp / self.max_hp))
+            if fill_w > 0:
+                pygame.draw.rect(screen, HP_COLOR, (bar_rect.x, bar_rect.y, fill_w, bh))
+            pygame.draw.rect(screen, BAR_BORDER, bar_rect, 1)
+
+    def damage(self, amount: float):
+        self.hp = max(0.0, self.hp - amount)
+        self.show_bar = NPC_SHOW_BAR_TIME
+
+    def alive(self) -> bool:
+        return self.hp > 0.0
+
 # --------------------------- UI: Bars above player ----------------------------
 def draw_player_bars(screen: pygame.Surface, cam_x: int, cam_y: int,
                      player: pygame.Rect, hp: float, hp_max: int,
@@ -1119,6 +1197,8 @@ def main():
     camera_x = 0
     camera_y = 0
 
+    npcs: list[HostileNPC] = []
+
     mining_effects = {}
 
     # Inventory (resources & potions)
@@ -1341,6 +1421,22 @@ def main():
                 if consumed:
                     continue
 
+                # Attack NPCs before mining
+                wx = mx + camera_x
+                wy = my + camera_y
+                hit = False
+                for npc in list(npcs):
+                    if npc.rect.collidepoint(wx, wy):
+                        tool = hotbar[selected_slot] or "hand"
+                        dmg = TOOL_DAMAGE.get(tool, TOOL_DAMAGE["hand"])
+                        npc.damage(dmg)
+                        if not npc.alive():
+                            npcs.remove(npc)
+                        hit = True
+                        break
+                if hit:
+                    continue
+
                 # Mining click
                 tx = (mx + camera_x) // TILE_SIZE
                 ty = (my + camera_y) // TILE_SIZE
@@ -1474,6 +1570,31 @@ def main():
                 hregen = health_regen_rate(hp, hp_max)
                 hp = min(hp_max, hp + hregen * dt)
 
+        # Darkness for NPC spawning
+        depth_tiles = player.bottom // TILE_SIZE - SURFACE_LEVEL
+        dark_ratio = clamp(depth_tiles / MAX_DARK_DEPTH, 0.0, 1.0)
+        dark_alpha = int(200 * dark_ratio)
+        if lantern_on:
+            dark_alpha = max(0, dark_alpha - LANTERN_BRIGHTNESS)
+
+        # Spawn hostile NPCs only in pitch black
+        if dark_alpha >= PITCH_BLACK_ALPHA and random.random() < NPC_SPAWN_RATE * dt and len(npcs) < 5:
+            sx = player.x + random.randint(-5, 5) * TILE_SIZE
+            sy = player.y + random.randint(-3, 3) * TILE_SIZE
+            if 0 <= sx < WORLD_WIDTH * TILE_SIZE and 0 <= sy < WORLD_HEIGHT * TILE_SIZE:
+                tx, ty = int(sx // TILE_SIZE), int(sy // TILE_SIZE)
+                if world[tx][ty] is None:
+                    npcs.append(HostileNPC(sx, sy))
+
+        # Update NPCs
+        for npc in list(npcs):
+            npc.update(dt, player)
+            if npc.rect.colliderect(player) and npc.attack_cd <= 0.0:
+                take_damage(NPC_CONTACT_DAMAGE)
+                npc.attack_cd = 1.0
+            if not npc.alive():
+                npcs.remove(npc)
+
         update_fluids(world, fluid_type, fluid_level)
 
         # Draw world
@@ -1502,6 +1623,10 @@ def main():
                     eff = mining_effects.get((tx, ty))
                     if eff and (ty < SURFACE_LEVEL or revealed[tx][ty]):
                         eff.draw(screen, camera_x, camera_y)
+
+        # NPCs
+        for npc in npcs:
+            npc.draw(screen, camera_x, camera_y)
 
         # Fog
         if not FOG_BLOCKS_PLAYER:
