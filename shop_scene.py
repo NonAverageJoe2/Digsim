@@ -45,6 +45,19 @@ BUY_ITEMS = [
     ("sword", "Sword", 60, {"strength": 3, "speed": 2}),
     ("metal_shovel", "Metal Shovel", 80, {"strength": 5, "endurance": 5, "speed": 5}),
     ("metal_pick", "Metal Pickaxe", 120, {"strength": 5, "endurance": 5, "speed": 5}),
+    # Armor pieces
+    ("padded_hat", "Padded Hat", 100, None),
+    ("padded_tunic", "Padded Tunic", 120, None),
+    ("padded_pants", "Padded Pants", 110, None),
+    ("padded_boots", "Padded Boots", 90, None),
+    ("chain_helmet", "Chain Helmet", 300, {"strength": 2}),
+    ("chain_chest", "Chain Chest", 350, {"strength": 3}),
+    ("chain_legs", "Chain Leggings", 320, {"strength": 3}),
+    ("chain_boots", "Chain Boots", 280, {"strength": 2}),
+    ("plated_helmet", "Plated Helmet", 1000, {"strength": 5}),
+    ("plated_chest", "Plated Chest", 1200, {"strength": 6}),
+    ("plated_legs", "Plated Greaves", 1100, {"strength": 6}),
+    ("plated_boots", "Plated Boots", 900, {"strength": 5}),
     ("hp_potion", "HP Potion", 15, None),
     ("stam_potion", "Stamina Potion", 12, None),
 ]
@@ -56,6 +69,22 @@ TOOL_MAX = {
     "stone_pick": 160,
     "metal_pick": 280,
     "sword": 250,
+}
+
+# Armor slots
+ARMOR_ITEMS = {
+    "padded_hat": "head",
+    "padded_tunic": "body",
+    "padded_pants": "legs",
+    "padded_boots": "feet",
+    "chain_helmet": "head",
+    "chain_chest": "body",
+    "chain_legs": "legs",
+    "chain_boots": "feet",
+    "plated_helmet": "head",
+    "plated_chest": "body",
+    "plated_legs": "legs",
+    "plated_boots": "feet",
 }
 
 # Resources that can be sold back to the shop
@@ -80,6 +109,19 @@ ITEM_COLORS = {
     "sword": (210, 210, 230),
     "hp_potion": (210, 60, 60),
     "stam_potion": (70, 200, 110),
+    # Armor
+    "padded_hat": (200, 200, 180),
+    "padded_tunic": (200, 200, 170),
+    "padded_pants": (200, 200, 160),
+    "padded_boots": (200, 200, 150),
+    "chain_helmet": (150, 150, 150),
+    "chain_chest": (150, 150, 160),
+    "chain_legs": (150, 150, 170),
+    "chain_boots": (150, 150, 180),
+    "plated_helmet": (180, 180, 190),
+    "plated_chest": (180, 180, 200),
+    "plated_legs": (180, 180, 210),
+    "plated_boots": (180, 180, 220),
     # Resources
     "grass_item": (34, 139, 34),
     "dirt_item": (139, 69, 19),
@@ -187,7 +229,8 @@ def run_shop(screen: pygame.Surface,
              coins: int,
              inventory: dict[str, int],
              tools_owned: dict[str, float | None],
-             skills: Optional[Dict[str, int]] = None) -> tuple[int, dict[str, int], dict[str, float | None]]:
+             armor: Dict[str, str | None],
+             skills: Optional[Dict[str, int]] = None) -> tuple[int, dict[str, int], dict[str, float | None], Dict[str, str | None]]:
     """Run the enhanced shop scene with tabbed panel and skill requirements.
     
     Args:
@@ -195,10 +238,11 @@ def run_shop(screen: pygame.Surface,
         coins: Current coin count
         inventory: Player's inventory (resources)
         tools_owned: Tools owned by player with durability
+        armor: Equipped armor items by slot
         skills: Dict with 'strength', 'endurance', 'speed' levels (optional)
     
     Returns:
-        Updated (coins, inventory, tools_owned) tuple
+        Updated (coins, inventory, tools_owned, armor) tuple
     """
     
     # Default skills if not provided
@@ -293,13 +337,13 @@ def run_shop(screen: pygame.Surface,
                     if shop_open:
                         shop_open = False
                     else:
-                        return coins, inventory, tools_owned
+                        return coins, inventory, tools_owned, armor
                 elif event.key == pygame.K_e:
                     shop_open = not shop_open
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 # Exit button
                 if exit_rect.collidepoint(mx, my):
-                    return coins, inventory, tools_owned
+                    return coins, inventory, tools_owned, armor
                 
                 # Shop button
                 if not shop_open and shop_button_rect.collidepoint(mx, my):
@@ -333,6 +377,9 @@ def run_shop(screen: pygame.Surface,
                                     coins -= price
                                     if item_id in TOOL_MAX:
                                         tools_owned[item_id] = float(TOOL_MAX[item_id])
+                                    elif item_id in ARMOR_ITEMS:
+                                        slot = ARMOR_ITEMS[item_id]
+                                        armor[slot] = item_id
                                     else:
                                         # Consumables
                                         inventory[item_id] = inventory.get(item_id, 0) + 1
@@ -600,4 +647,4 @@ def run_shop(screen: pygame.Surface,
         
         pygame.display.flip()
     
-    return coins, inventory, tools_owned
+    return coins, inventory, tools_owned, armor
