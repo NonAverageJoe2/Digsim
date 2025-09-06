@@ -4,6 +4,9 @@ from collections import deque
 import pygame
 import colorsys
 
+from collections import deque
+
+
 # =============================================================================
 # Platformer World (Pygame) + Ores Depth Progression + Teleport-to-Shop
 # =============================================================================
@@ -1151,6 +1154,61 @@ def draw_minimap_small(screen: pygame.Surface, mini: pygame.Surface):
     screen.blit(target, (x, y))
     return pygame.Rect(x, y, MINIMAP_W, MINIMAP_H)
 
+from collections import deque
+
+def reveal_cave_and_halo(revealed, world, sx, sy):
+    """
+    Flood-fill through connected empty tiles starting at (sx, sy)
+    and reveal a 4-neighbour halo so cave walls also become visible.
+    """
+    width = len(world)
+    if width <= 0:
+        return
+    height = len(world[0])
+
+    def in_bounds(x, y):
+        return 0 <= x < width and 0 <= y < height
+
+    def reveal_tile(x, y):
+        if in_bounds(x, y):
+            revealed[x][y] = True
+
+    def reveal_neighbors4(x, y):
+        reveal_tile(x + 1, y)
+        reveal_tile(x - 1, y)
+        reveal_tile(x, y + 1)
+        reveal_tile(x, y - 1)
+
+    if not in_bounds(sx, sy):
+        return
+
+    if world[sx][sy] is not None:
+        reveal_tile(sx, sy)
+        reveal_neighbors4(sx, sy)
+        return
+
+    q = deque()
+    visited_empty = set()
+
+    q.append((sx, sy))
+    visited_empty.add((sx, sy))
+    reveal_tile(sx, sy)
+    reveal_neighbors4(sx, sy)
+
+    while q:
+        x, y = q.popleft()
+        reveal_neighbors4(x, y)
+
+        for dx, dy in ((1,0), (-1,0), (0,1), (0,-1)):
+            nx, ny = x + dx, y + dy
+            if not in_bounds(nx, ny):
+                continue
+            if world[nx][ny] is None and (nx, ny) not in visited_empty:
+                visited_empty.add((nx, ny))
+                reveal_tile(nx, ny)
+                q.append((nx, ny))
+
+
 def draw_minimap_big(screen: pygame.Surface, mini: pygame.Surface):
     sw, sh = screen.get_size()
     overlay = pygame.Surface((sw, sh), pygame.SRCALPHA)
@@ -1563,10 +1621,8 @@ def main():
                 if 0 <= tx < WORLD_WIDTH and 0 <= ty < WORLD_HEIGHT and world[tx][ty]:
                     tile_type = world[tx][ty]
                     world[tx][ty] = None
-                    reveal_tile(revealed, tx, ty)
-                    # Flood reveal any newly exposed caverns
-                    reveal_cave(revealed, world, tx, ty)
-                    reveal_neighbors4(revealed, tx, ty)
+                    reveal_cave_and_halo(revealed, world, tx, ty)
+                    minimap_dirty = True
                     for dx, dy in [(1,0),(-1,0),(0,1),(0,-1)]:
                         nx, ny = tx + dx, ty + dy
                         if 0 <= nx < WORLD_WIDTH and 0 <= ny < WORLD_HEIGHT and world[nx][ny] is None and not revealed[nx][ny]:
